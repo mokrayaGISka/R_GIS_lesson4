@@ -1,0 +1,120 @@
+---
+title: "Mapping U.S. presidential elections results by state"
+author: "by BPG"
+date: "2/11/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(data.table)
+library(tidyr)
+library(sp)
+library(sf)
+library(stringr)
+library(spData)
+library(tmap)
+library(elections)
+
+```
+
+
+## How to start using R Markdown
+
+You need to install[pandoc](pandoc.org) and two packages:
+
+```{r packages needed, eval = FALSE}
+install.packages("rmarkdown")
+install.packages("knitr")
+```
+
+
+## Loading needed data
+
+```{r data loading}
+
+presidentsdata = fread('/Users/Belka/Downloads/1976-2020-president.csv', dec=",") 
+glimpse(presidentsdata)
+
+data(eldat)
+glimpse(eldat)
+
+#Spatial Data
+glimpse(us_states)
+```
+
+
+## Data
+
+- Results of all presidential elections from `r min(presidentsdata$year)` to `r max(presidentsdata$year)` by state level
+- Data table with elected presidents since `r min(eldat$electionyear)`
+- Spatial data of state boundaries 
+
+
+## Data transformation
+
+At this stage we transform data to make it applicable for our purposes
+
+```{r data processing}
+presidentsdata_cleaned = presidentsdata %>% select(year,state,candidate, party_simplified, candidatevotes)  %>% group_by(year, state)  %>% top_n(1, candidatevotes) # selecting needed information
+
+head(presidentsdata_cleaned)
+
+years = unique(presidentsdata_cleaned$year) 
+
+presidentsdata_cleaned = presidentsdata_cleaned %>% mutate(party_cand = paste0(party_simplified, ' (', candidate ,')'))  %>% select(year, state, party_cand) 
+
+head(presidentsdata_cleaned)
+
+presidentsdata_cleaned_wide = presidentsdata_cleaned %>% pivot_wider(names_from = year, values_from = party_cand) %>% na.omit() %>% mutate(state = str_to_title(state)) 
+
+head(presidentsdata_cleaned_wide)
+
+presidentsdatasf = us_states %>% left_join(presidentsdata_cleaned_wide, by = c("NAME" = "state"))
+
+head(presidentsdatasf)
+
+#Second table
+presidentwin = eldat %>% filter(electionyear %in% years) %>% select(electionyear, winner,winnerparty)
+
+pr2020 = c('2020', 'Joe Biden', 'Dem.' ) # creating results for 2020 elections
+presidentwin  = presidentwin %>% rbind(pr2020) #  adding 2020 to the table
+
+head(presidentwin)
+
+```
+
+
+## Creating maps for each year
+
+```{r creating set of maps}
+
+map = list()
+
+for (i in 1:12) {  
+  map[[i]] = tm_shape(presidentsdatasf) +
+    tm_polygons(colnames(presidentsdatasf)[i+6],
+                palette = c('royalblue2', 'brown1'),
+                border.col = "white",
+                lwd = 0.3, 
+                showNA = FALSE)+
+    tm_legend(legend.position = c("left", "bottom"))+
+    tm_layout(inner.margins = c(0.1, 0.1, 0.1, 0.1), fontfamily = 'Muller', frame = FALSE)}
+
+
+```
+
+
+# Examples of maps
+
+```{r examples of maps}
+
+map[[1]]
+map[[12]]
+
+```
+
+

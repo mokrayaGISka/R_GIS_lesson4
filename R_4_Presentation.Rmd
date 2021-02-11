@@ -1,0 +1,81 @@
+---
+title: "U.S. Presidential Elections Results: 1976 - 2020"
+author: "by BPG"
+date: "2/11/2021"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(dplyr)
+library(data.table)
+library(tidyr)
+library(sp)
+library(sf)
+library(stringr)
+library(spData)
+library(tmap)
+library(elections)
+
+```
+
+
+## Intro
+
+- This presentation shows the results of the U.S presidential elections from 1976 till 2020  by state level
+- Data source: [Harvard Election Data Archive](https://projects.iq.harvard.edu/eda/home)
+- Don't forget to follow us on [YouTube](https://www.youtube.com/channel/UC99_v_T0CTEsYiY2O6YsvOA)
+and [GitHub](https://github.com/mokrayaGISka/) ;))
+
+
+```{r data processing, include=FALSE}
+
+presidentsdata = fread('/Users/Belka/Downloads/1976-2020-president.csv', dec=",") # uploading data 
+
+presidentsdata_cleaned = presidentsdata %>% select(year,state,candidate, party_simplified, candidatevotes)  %>% group_by(year, state)  %>% top_n(1, candidatevotes) # selecting needed information
+
+years = unique(presidentsdata_cleaned$year) 
+
+presidentsdata_cleaned = presidentsdata_cleaned %>% mutate(party_cand = paste0(party_simplified, ' (', candidate ,')'))  %>% select(year, state, party_cand) 
+
+presidentsdata_cleaned_wide = presidentsdata_cleaned %>% pivot_wider(names_from = year, values_from = party_cand) %>% na.omit() %>% mutate(state = str_to_title(state))
+
+presidentsdatasf = us_states %>% left_join(presidentsdata_cleaned_wide, by = c("NAME" = "state"))
+
+#  creating set of maps for each year 
+map = list()
+
+for (i in 1:12) {  
+  map[[i]] = tm_shape(presidentsdatasf) +
+    tm_polygons(colnames(presidentsdatasf)[i+6],
+                palette = c('royalblue2', 'brown1'),
+                border.col = "white",
+                lwd = 0.3, 
+                showNA = FALSE)+
+    tm_legend(legend.position = c("left", "bottom"))+
+    tm_layout(inner.margins = c(0.1, 0.1, 0.1, 0.1), fontfamily = 'Muller', frame = FALSE)}
+
+
+
+data(eldat)
+presidentwin = eldat %>% filter(electionyear %in% years) %>% select(electionyear, winner,winnerparty)
+
+pr2020 = c('2020', 'Joe Biden', 'Dem.' ) # creating results for 2020 elections
+presidentwin  = presidentwin %>% rbind(pr2020) #  adding 2020 to the table
+
+```
+
+
+```{r, results="asis"}
+
+for(i in 1:12){
+  
+  cat("\n") 
+  cat("##", years[i], "\n") # Create headings
+  cat(paste('President-elect:', presidentwin[i,2], "\n"))
+  print(map[[i]])
+  cat("\n")
+  
+}
+```
